@@ -1,0 +1,243 @@
+import { siteConfig } from '../config/site';
+import React, { useState, useEffect } from 'react';
+import { X, Copy, Check, ShieldCheck, QrCode, AlertCircle, Smartphone } from 'lucide-react';
+import { fetchPaymentSettings, DEFAULT_PAYMENT_SETTINGS } from '../lib/api';
+import type { PaymentSettings } from '../types';
+
+interface PaymentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirmPayment: (paymentData: { method: 'BankTransfer' | 'Fonepay'; transactionRef: string }) => void;
+  totalAmount: number;
+  loading?: boolean;
+}
+
+export default function PaymentModal({
+  isOpen,
+  onClose,
+  onConfirmPayment,
+  totalAmount,
+  loading = false,
+}: PaymentModalProps) {
+  const [selectedMethod, setSelectedMethod] = useState<'BankTransfer' | 'Fonepay'>('BankTransfer');
+  const [settings, setSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
+  const [copied, setCopied] = useState(false);
+  const [transactionRef, setTransactionRef] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchPaymentSettings().then((s) => {
+        if (s) setSettings(s);
+      });
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const currentId = selectedMethod === 'BankTransfer' ? settings.esewa_id : settings.khalti_id;
+  const currentName = selectedMethod === 'BankTransfer' ? settings.esewa_name : settings.khalti_name;
+  const currentQrUrl = selectedMethod === 'BankTransfer' ? settings.esewa_qr_url : settings.khalti_qr_url;
+
+  const handleCopyId = () => {
+    if (!currentId) return;
+    navigator.clipboard.writeText(currentId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleConfirm = (e: React.FormEvent) => {
+    e.preventDefault();
+    onConfirmPayment({
+      method: selectedMethod,
+      transactionRef: transactionRef.trim(),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-2xl max-w-md sm:max-w-lg w-full my-auto overflow-hidden shadow-2xl border border-brand-gray-200 animate-in fade-in zoom-in duration-150">
+        {/* Header */}
+        <div className="bg-brand-charcoal text-white p-4 sm:p-5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-extrabold leading-tight">Digital Pre-Payment</h2>
+              <p className="text-xs text-brand-gray-400">Direct Bank QR & Fonepay Transfer</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="text-brand-gray-400 hover:text-white transition-colors p-1 rounded-lg"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Ride-Hailing Notice */}
+        <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-5 py-2.5 text-xs text-amber-900 flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            <span className="font-bold">No Cash on Delivery: </span>
+            Your order is dispatched via ride-hailing riders who do not handle cash. Please complete digital payment to initiate packing & dispatch.
+          </p>
+        </div>
+
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+          {/* Amount Display */}
+          <div className="bg-brand-gray-50 border border-brand-gray-200 rounded-xl p-3 sm:p-4 flex items-center justify-between">
+            <span className="text-xs font-bold text-brand-gray-500 uppercase tracking-wider">Amount Due:</span>
+            <span className="text-xl sm:text-2xl font-extrabold text-brand-charcoal">
+              Rs. {totalAmount.toLocaleString()}
+            </span>
+          </div>
+
+          {/* Provider Selector Tabs */}
+          <div>
+            <label className="block text-xs font-bold text-brand-charcoal mb-1.5">Select Payment QR Option:</label>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMethod('BankTransfer');
+                  setCopied(false);
+                }}
+                className={`py-2.5 px-3 sm:px-4 rounded-xl border-2 font-extrabold text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition-all ${
+                  selectedMethod === 'BankTransfer'
+                    ? 'border-emerald-600 bg-emerald-50 text-emerald-800 shadow-xs'
+                    : 'border-brand-gray-200 bg-white text-brand-gray-600 hover:bg-brand-gray-50'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shrink-0" />
+                <span className="truncate">Bank Transfer QR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMethod('Fonepay');
+                  setCopied(false);
+                }}
+                className={`py-2.5 px-3 sm:px-4 rounded-xl border-2 font-extrabold text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition-all ${
+                  selectedMethod === 'Fonepay'
+                    ? 'border-red-600 bg-red-50 text-red-800 shadow-xs'
+                    : 'border-brand-gray-200 bg-white text-brand-gray-600 hover:bg-brand-gray-50'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block shrink-0" />
+                <span className="truncate">Fonepay QR</span>
+              </button>
+            </div>
+          </div>
+
+          {/* QR Code Presentation Box */}
+          <div className="border border-brand-gray-200 rounded-2xl p-3 sm:p-4 bg-white text-center space-y-2.5 shadow-xs">
+            {/* Enlarged QR Code Container */}
+            <div className="w-full max-w-[280px] sm:max-w-[320px] aspect-square mx-auto bg-white rounded-xl border-2 border-brand-gray-200 shadow-xs flex items-center justify-center p-1 sm:p-1.5 relative overflow-hidden">
+              {currentQrUrl ? (
+                <img
+                  src={currentQrUrl}
+                  alt={selectedMethod === 'BankTransfer' ? 'Direct Bank Transfer QR Code' : 'Fonepay QR Code'}
+                  className="w-full h-full object-contain rounded-lg"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-brand-gray-400 p-4">
+                  <QrCode className="w-24 h-24 text-brand-charcoal/70 mb-2" />
+                  <span className="text-xs font-bold text-brand-charcoal">
+                    {selectedMethod === 'BankTransfer' ? 'Direct Bank Transfer QR' : 'Fonepay QR'}
+                  </span>
+                  <span className="text-[11px] text-brand-gray-500 mt-1">
+                    Scan via Mobile Banking, eSewa, or Khalti
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Wallet Compatibility Helper Banner */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg py-1.5 px-3 max-w-[320px] mx-auto">
+              <p className="text-[11px] font-semibold text-emerald-800">
+                ✨ Compatible with eSewa, Khalti, mobile banking apps, and all Nepali digital wallets
+              </p>
+            </div>
+
+            {/* Merchant Account Details */}
+            <div className="space-y-1 pt-1">
+              <p className="text-xs font-bold text-brand-charcoal">{currentName || siteConfig.companyLegalName}</p>
+              <div className="flex items-center justify-center gap-2 text-xs font-mono font-bold text-brand-gray-600">
+                <Smartphone className="w-3.5 h-3.5 text-brand-blue shrink-0" />
+                <span className="truncate">{selectedMethod === 'BankTransfer' ? 'Bank Account / QR ID' : 'Fonepay ID'}: {currentId}</span>
+                <button
+                  type="button"
+                  onClick={handleCopyId}
+                  className="inline-flex items-center gap-1 text-[11px] font-sans font-bold text-brand-blue hover:text-brand-blue-dark transition-colors ml-1 px-2 py-0.5 bg-brand-blue/10 rounded-md shrink-0"
+                  title="Copy ID"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      <span className="text-emerald-700">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Transaction Code Input */}
+          <div>
+            <label className="block text-xs font-bold text-brand-charcoal mb-1">
+              Transaction Code / Reference ID <span className="text-brand-gray-400 font-normal">(Recommended)</span>
+            </label>
+            <input
+              type="text"
+              value={transactionRef}
+              onChange={(e) => setTransactionRef(e.target.value)}
+              placeholder="e.g. 6B8X2K or remarks entered in wallet"
+              className="w-full h-10 px-3 rounded-lg border-2 border-brand-gray-300 focus:border-brand-blue focus:outline-none text-xs font-mono uppercase"
+            />
+            <p className="text-[11px] text-brand-gray-500 mt-1">
+              Helps our admin verify and confirm your order within minutes.
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="pt-2 flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="w-full sm:w-1/3 h-11 border-2 border-brand-gray-300 text-brand-charcoal font-bold text-xs rounded-xl hover:bg-brand-gray-100 transition-colors"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={loading}
+              className="w-full sm:w-2/3 h-11 bg-brand-blue hover:bg-brand-blue-dark text-white font-bold text-xs rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Submitting Order...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>I've Completed Payment</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
